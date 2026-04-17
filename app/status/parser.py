@@ -18,7 +18,7 @@ class WeeklyStatus:
         return (now - self.created_at) <= timedelta(days=freshness_days)
 
 
-_TAG_RE = re.compile(r"#WeeklyStatus\b", re.IGNORECASE)
+_TAG_RE = re.compile(r"\\?#WeeklyStatus\b", re.IGNORECASE)
 _COMMENTS_RE = re.compile(r"^\s*Comments\s*:\s*", re.IGNORECASE)
 _DEADLINE_RE = re.compile(r"^\s*DL\s*по\s*решению\s*:\s*", re.IGNORECASE)
 

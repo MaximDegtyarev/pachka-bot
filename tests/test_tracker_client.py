@@ -162,6 +162,51 @@ async def test_list_projects_paginates_until_done(
     assert all(p.summary == "Project bot" for p in projects)
 
 
+COMMENTS_JSON = [
+    {
+        "self": f"{BASE_URL}/v2/entities/project/69e2138e71a22713b3e17e74/comments/1",
+        "id": 1,
+        "longId": "69e213bc70fcad39d9d16d91",
+        "text": "\\#WeeklyStatus\nComments: test\nDL по решению: 13.04.2026",
+        "createdBy": PORTFOLIO_JSON["fields"]["lead"],
+        "createdAt": "2026-04-17T11:04:28.836+0000",
+        "updatedAt": "2026-04-17T11:04:28.836+0000",
+        "type": "standard",
+        "transport": "internal",
+    },
+    {
+        "self": f"{BASE_URL}/v2/entities/project/69e2138e71a22713b3e17e74/comments/3",
+        "id": 3,
+        "longId": "69e2877471a22713b3e229d0",
+        "text": "\\#WeeklyStatus\nComments: всё по плану, рисков нет\nDL по решению: 30.04.2026",
+        "createdBy": PORTFOLIO_JSON["fields"]["lead"],
+        "createdAt": "2026-04-17T19:18:12.889+0000",
+        "updatedAt": "2026-04-17T19:18:12.889+0000",
+        "type": "standard",
+        "transport": "internal",
+    },
+]
+
+
+async def test_list_project_comments_parses_escaped_tag(
+    client: YandexTrackerClient, httpx_mock: HTTPXMock
+) -> None:
+    httpx_mock.add_response(
+        url=f"{BASE_URL}/v2/entities/project/69e2138e71a22713b3e17e74/comments",
+        json=COMMENTS_JSON,
+    )
+    comments = await client.list_project_comments("69e2138e71a22713b3e17e74")
+    assert len(comments) == 2
+    # longId preferred over short int id
+    assert comments[0].id == "69e213bc70fcad39d9d16d91"
+    # Escaped-hash tag is preserved verbatim in body; parser layer strips the slash.
+    assert comments[0].body.startswith("\\#WeeklyStatus")
+    assert comments[1].body.startswith("\\#WeeklyStatus")
+    assert comments[0].author is not None
+    assert comments[0].author.display == "Maxim Degtyarev"
+    assert comments[1].created_at.day == 17
+
+
 async def test_list_projects_empty_portfolio(
     client: YandexTrackerClient, httpx_mock: HTTPXMock
 ) -> None:

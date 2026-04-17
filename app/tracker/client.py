@@ -52,6 +52,17 @@ def _parse_portfolio(data: dict[str, Any]) -> Portfolio:
     )
 
 
+def _parse_comment(data: dict[str, Any]) -> Comment:
+    created_at = _parse_dt(data.get("createdAt"))
+    assert created_at is not None, "Tracker comment without createdAt"
+    return Comment(
+        id=str(data.get("longId") or data.get("id")),
+        body=data.get("text") or "",
+        created_at=created_at,
+        author=_parse_user(data.get("createdBy")),
+    )
+
+
 def _parse_project(data: dict[str, Any]) -> Project:
     f = data.get("fields") or {}
     parent = f.get("parentEntity")
@@ -138,8 +149,10 @@ class YandexTrackerClient:
         return _parse_project(r.json())
 
     async def list_project_comments(self, project_id: str) -> list[Comment]:
-        # Endpoint TBD — will be wired up after dump_comments.py probe.
-        raise NotImplementedError("comments endpoint pending live probe")
+        r = await self._http.get(f"/v2/entities/project/{project_id}/comments")
+        r.raise_for_status()
+        payload = r.json()
+        return [_parse_comment(item) for item in payload]
 
     async def _search_all(
         self,

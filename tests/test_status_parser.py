@@ -12,8 +12,22 @@ NOW = datetime(2026, 4, 17, 12, 0, tzinfo=UTC)
 def test_tag_detection():
     assert has_weekly_status_tag("#WeeklyStatus")
     assert has_weekly_status_tag("some text\n#weeklystatus\nmore")
+    # Tracker escapes "#" with a leading backslash when storing comments.
+    assert has_weekly_status_tag("\\#WeeklyStatus\nComments: ...")
     assert not has_weekly_status_tag("#Weekly or status")
     assert not has_weekly_status_tag("no tags here")
+
+
+def test_parse_escaped_tag_from_tracker():
+    body = (
+        "\\#WeeklyStatus\n"
+        "Comments: всё идёт по плану\n"
+        "DL по решению: 30.04.2026\n"
+    )
+    ws = parse_weekly_status(body, NOW)
+    assert ws is not None
+    assert "всё идёт по плану" in ws.comments
+    assert ws.deadline == "30.04.2026"
 
 
 def test_parse_full_template():
