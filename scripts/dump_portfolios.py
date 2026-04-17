@@ -26,25 +26,21 @@ async def _try(client: httpx.AsyncClient, method: str, url: str, **kw) -> None:
         print(r.text[:2000])
 
 
-async def probe_with_header(
-    base: str, token: str, org_id: str, header_name: str, portfolio_id: str
-) -> None:
-    print(f"\n########## Header: {header_name}={org_id} ##########")
-    headers = {
-        "Authorization": f"OAuth {token}",
-        header_name: org_id,
-        "Content-Type": "application/json",
-    }
-    async with httpx.AsyncClient(base_url=base, headers=headers, timeout=30.0) as client:
-        await _try(client, "GET", "/v2/myself")
-        await _try(client, "GET", f"/v2/entities/portfolio/{portfolio_id}")
-        await _try(
-            client,
-            "POST",
-            "/v2/entities/project/_search",
-            json={"filter": {"parentEntity": portfolio_id}},
-            params={"perPage": 50},
-        )
+PROJECT_FIELDS = [
+    "summary",
+    "description",
+    "status",
+    "lead",
+    "teamUsers",
+    "parentEntity",
+    "parentEntityId",
+    "start",
+    "end",
+    "tags",
+    "createdBy",
+    "createdAt",
+    "updatedAt",
+]
 
 
 async def main(portfolio_id: str) -> None:
@@ -52,8 +48,56 @@ async def main(portfolio_id: str) -> None:
     org_id = os.environ["TRACKER_ORG_ID"]
     base = os.environ.get("TRACKER_API_BASE", "https://api.tracker.yandex.net")
 
-    for header in ("X-Org-ID", "X-Cloud-Org-ID"):
-        await probe_with_header(base, token, org_id, header, portfolio_id)
+    headers = {
+        "Authorization": f"OAuth {token}",
+        "X-Org-ID": org_id,
+        "Content-Type": "application/json",
+    }
+
+    async with httpx.AsyncClient(base_url=base, headers=headers, timeout=30.0) as client:
+        print("=== 1. Portfolio with fields ===")
+        await _try(
+            client,
+            "GET",
+            f"/v2/entities/portfolio/{portfolio_id}",
+            params={"fields": ",".join(["summary", "description", "lead", "teamUsers"])},
+        )
+
+        print("\n=== 2. ALL projects in the org (no filter, first 50) ===")
+        await _try(
+            client,
+            "POST",
+            "/v2/entities/project/_search",
+            json={"fields": PROJECT_FIELDS},
+            params={"perPage": 50},
+        )
+
+        print("\n=== 3. Projects by parentEntity (original filter) ===")
+        await _try(
+            client,
+            "POST",
+            "/v2/entities/project/_search",
+            json={"filter": {"parentEntity": portfolio_id}, "fields": PROJECT_FIELDS},
+            params={"perPage": 50},
+        )
+
+        print("\n=== 4. Projects by parentEntityId (alt filter key) ===")
+        await _try(
+            client,
+            "POST",
+            "/v2/entities/project/_search",
+            json={"filter": {"parentEntityId": portfolio_id}, "fields": PROJECT_FIELDS},
+            params={"perPage": 50},
+        )
+
+        print("\n=== 5. ALL portfolios in the org ===")
+        await _try(
+            client,
+            "POST",
+            "/v2/entities/portfolio/_search",
+            json={"fields": ["summary", "lead", "parentEntity"]},
+            params={"perPage": 50},
+        )
 
 
 if __name__ == "__main__":
