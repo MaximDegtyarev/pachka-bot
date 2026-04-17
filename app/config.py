@@ -7,6 +7,8 @@ class Settings(BaseSettings):
     tracker_oauth_token: str
     tracker_org_id: str
     tracker_api_base: str = "https://api.tracker.yandex.net"
+    # "360" for Yandex 360 orgs (X-Org-ID header) or "cloud" for Yandex Cloud orgs (X-Cloud-Org-ID).
+    tracker_org_type: str = "360"
 
     portfolio_domain_id: str
     portfolio_subdomain_id: str

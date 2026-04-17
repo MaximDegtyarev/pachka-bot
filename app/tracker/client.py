@@ -34,14 +34,16 @@ class YandexTrackerClient:
         base_url: str,
         oauth_token: str,
         org_id: str,
+        org_type: str = "360",
         http_client: httpx.AsyncClient | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
+        org_header = "X-Cloud-Org-ID" if org_type.lower() == "cloud" else "X-Org-ID"
         self._http = http_client or httpx.AsyncClient(
             base_url=self._base_url,
             headers={
                 "Authorization": f"OAuth {oauth_token}",
-                "X-Cloud-Org-ID": org_id,
+                org_header: org_id,
                 "Content-Type": "application/json",
             },
             timeout=httpx.Timeout(15.0),
