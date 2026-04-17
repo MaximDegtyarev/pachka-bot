@@ -26,21 +26,20 @@ async def _try(client: httpx.AsyncClient, method: str, url: str, **kw) -> None:
         print(r.text[:2000])
 
 
-PROJECT_FIELDS = [
-    "summary",
-    "description",
-    "status",
-    "lead",
-    "teamUsers",
-    "parentEntity",
-    "parentEntityId",
-    "start",
-    "end",
-    "tags",
-    "createdBy",
-    "createdAt",
-    "updatedAt",
-]
+PROJECT_FIELDS = ",".join(
+    [
+        "summary",
+        "description",
+        "status",
+        "lead",
+        "teamUsers",
+        "parentEntity",
+        "parentEntityId",
+        "start",
+        "end",
+        "tags",
+    ]
+)
 
 
 async def main(portfolio_id: str) -> None:
@@ -60,7 +59,7 @@ async def main(portfolio_id: str) -> None:
             client,
             "GET",
             f"/v2/entities/portfolio/{portfolio_id}",
-            params={"fields": ",".join(["summary", "description", "lead", "teamUsers"])},
+            params={"fields": "summary,description,lead,teamUsers"},
         )
 
         print("\n=== 2. ALL projects in the org (no filter, first 50) ===")
@@ -68,8 +67,8 @@ async def main(portfolio_id: str) -> None:
             client,
             "POST",
             "/v2/entities/project/_search",
-            json={"fields": PROJECT_FIELDS},
-            params={"perPage": 50},
+            json={},
+            params={"perPage": 50, "fields": PROJECT_FIELDS},
         )
 
         print("\n=== 3. Projects by parentEntity (original filter) ===")
@@ -77,8 +76,8 @@ async def main(portfolio_id: str) -> None:
             client,
             "POST",
             "/v2/entities/project/_search",
-            json={"filter": {"parentEntity": portfolio_id}, "fields": PROJECT_FIELDS},
-            params={"perPage": 50},
+            json={"filter": {"parentEntity": portfolio_id}},
+            params={"perPage": 50, "fields": PROJECT_FIELDS},
         )
 
         print("\n=== 4. Projects by parentEntityId (alt filter key) ===")
@@ -86,8 +85,8 @@ async def main(portfolio_id: str) -> None:
             client,
             "POST",
             "/v2/entities/project/_search",
-            json={"filter": {"parentEntityId": portfolio_id}, "fields": PROJECT_FIELDS},
-            params={"perPage": 50},
+            json={"filter": {"parentEntityId": portfolio_id}},
+            params={"perPage": 50, "fields": PROJECT_FIELDS},
         )
 
         print("\n=== 5. ALL portfolios in the org ===")
@@ -95,8 +94,8 @@ async def main(portfolio_id: str) -> None:
             client,
             "POST",
             "/v2/entities/portfolio/_search",
-            json={"fields": ["summary", "lead", "parentEntity"]},
-            params={"perPage": 50},
+            json={},
+            params={"perPage": 50, "fields": "summary,lead,parentEntity"},
         )
 
 
