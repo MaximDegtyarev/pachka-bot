@@ -1,3 +1,4 @@
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -22,7 +23,7 @@ def _configure_logging(level: str) -> None:
             structlog.dev.ConsoleRenderer() if level == "DEBUG" else structlog.processors.JSONRenderer(),
         ],
         wrapper_class=structlog.make_filtering_bound_logger(
-            getattr(__import__("logging"), level, 20)
+            getattr(logging, level, logging.INFO)
         ),
     )
 
