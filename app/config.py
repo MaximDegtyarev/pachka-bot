@@ -1,3 +1,4 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -11,9 +12,14 @@ class Settings(BaseSettings):
     # "360" for Yandex 360 orgs (X-Org-ID header) or "cloud" for Yandex Cloud orgs (X-Cloud-Org-ID).
     tracker_org_type: str = "360"
 
-    portfolio_domain_id: str
-    portfolio_subdomain_id: str
-    portfolio_team_id: str
+    portfolio_domain_ids: list[str]
+
+    @field_validator("portfolio_domain_ids", mode="before")
+    @classmethod
+    def _split_domain_ids(cls, v: object) -> object:
+        if isinstance(v, str):
+            return [x.strip() for x in v.split(",") if x.strip()]
+        return v
 
     pachca_access_token: str
     pachca_api_base: str = "https://api.pachca.com/api/shared/v1"

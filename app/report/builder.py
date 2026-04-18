@@ -31,9 +31,15 @@ HELP_TEXT = (
     "- `/show_domain_list` — список доменов\n"
     "- `/show_subdomain_list` — список поддоменов\n"
     "- `/show_team_list` — список команд\n"
-    "- `/show_domain_risk` — риски домена\n"
-    "- `/show_subdomain_risk` — риски поддомена\n"
-    "- `/show_team_risk` — риски команды\n"
+    "- `/show_domain_risk` — проекты с рисками в домене\n"
+    "- `/show_subdomain_risk` — проекты с рисками в поддомене\n"
+    "- `/show_team_risk` — проекты с рисками в команде\n"
+    "- `/show_domain_blocked` — заблокированные проекты в домене\n"
+    "- `/show_subdomain_blocked` — заблокированные проекты в поддомене\n"
+    "- `/show_team_blocked` — заблокированные проекты в команде\n"
+    "- `/show_domain_on_track` — проекты по плану в домене\n"
+    "- `/show_subdomain_on_track` — проекты по плану в поддомене\n"
+    "- `/show_team_on_track` — проекты по плану в команде\n"
     "- `/help` — эта справка"
 )
 
@@ -56,25 +62,29 @@ def render_list(title: str, portfolios: list[Portfolio], *, web_base: str | None
 
 
 def render_report(title: str, summaries: list[ProjectSummary]) -> str:
-    if not summaries:
-        return f"**{title}**\n\n_Нет проектов._"
-    blocks = [f"**{title}**", ""]
-    for s in summaries:
-        blocks.append(_render_project_block(s))
-        blocks.append("")
-    return "\n".join(blocks).rstrip()
+    return _render_blocks(title, summaries, empty_msg="Нет проектов.")
 
 
 def render_risk(title: str, summaries: list[ProjectSummary]) -> str:
-    risky = [
-        s
-        for s in summaries
-        if s.business_status in (BusinessStatus.AT_RISK, BusinessStatus.BLOCKED)
-    ]
-    if not risky:
-        return f"**{title}**\n\n_Проектов с рисками нет._"
+    filtered = [s for s in summaries if s.business_status == BusinessStatus.AT_RISK]
+    return _render_blocks(title, filtered, empty_msg="Проектов с рисками нет.")
+
+
+def render_blocked(title: str, summaries: list[ProjectSummary]) -> str:
+    filtered = [s for s in summaries if s.business_status == BusinessStatus.BLOCKED]
+    return _render_blocks(title, filtered, empty_msg="Заблокированных проектов нет.")
+
+
+def render_on_track(title: str, summaries: list[ProjectSummary]) -> str:
+    filtered = [s for s in summaries if s.business_status == BusinessStatus.ON_TRACK]
+    return _render_blocks(title, filtered, empty_msg="Проектов по плану нет.")
+
+
+def _render_blocks(title: str, summaries: list[ProjectSummary], *, empty_msg: str) -> str:
+    if not summaries:
+        return f"**{title}**\n\n_{empty_msg}_"
     blocks = [f"**{title}**", ""]
-    for s in risky:
+    for s in summaries:
         blocks.append(_render_project_block(s))
         blocks.append("")
     return "\n".join(blocks).rstrip()
@@ -92,6 +102,9 @@ def _render_project_block(s: ProjectSummary) -> str:
         f"- Статус: {emoji} {label}",
     ]
 
+    if project.end:
+        lines.append(f"- Дедлайн: {project.end}")
+
     ws = s.weekly_status
     comments = ws.comments if ws and ws.comments else None
     if comments:
@@ -102,8 +115,12 @@ def _render_project_block(s: ProjectSummary) -> str:
 
     if ws and ws.deadline:
         lines.append(f"- DL по решению: {ws.deadline}")
+
     if s.is_stale:
-        lines.append("- _Данные устарели (старше 6 дней)._")
+        if ws is None:
+            lines.append("- _Статус не заполнен (добавьте комментарий с #WeeklyStatus)._")
+        else:
+            lines.append("- _Данные устарели (старше 6 дней)._")
     return "\n".join(lines)
 
 

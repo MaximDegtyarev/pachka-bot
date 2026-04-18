@@ -4,121 +4,128 @@ from dataclasses import dataclass
 from typing import Literal
 
 from app.report.aggregator import StatusAggregator
-from app.report.builder import render_help, render_list, render_report, render_risk
+from app.report.builder import (
+    render_blocked,
+    render_help,
+    render_list,
+    render_on_track,
+    render_report,
+    render_risk,
+)
 from app.tracker.models import Portfolio
+
+Action = Literal["report", "risk", "blocked", "on_track"]
+Level = Literal["domain", "subdomain", "team"]
 
 
 @dataclass
 class _PendingSelection:
     """State stored per chat while waiting for the user to pick a number."""
 
-    action: Literal["report", "risk"]
-    level: Literal["subdomain", "team"]
+    action: Action
+    level: Level
     choices: list[Portfolio]
 
 
-_SELECTION_HEADER: dict[str, str] = {
+_SELECTION_HEADER: dict[Level, str] = {
+    "domain": "Выберите домен:",
     "subdomain": "Выберите поддомен:",
     "team": "Выберите команду:",
 }
 
-_LEVEL_NOUN: dict[str, str] = {
+_LEVEL_NOUN: dict[Level, str] = {
+    "domain": "доменов",
     "subdomain": "поддоменов",
     "team": "команд",
+}
+
+_LEVEL_GENITIVE: dict[Level, str] = {
+    "domain": "домена",
+    "subdomain": "поддомена",
+    "team": "команды",
+}
+
+_ACTION_LABEL: dict[Action, str] = {
+    "report": "Отчёт",
+    "risk": "Риски",
+    "blocked": "Заблокированные",
+    "on_track": "По плану",
+}
+
+_RENDERERS = {
+    "report": render_report,
+    "risk": render_risk,
+    "blocked": render_blocked,
+    "on_track": render_on_track,
 }
 
 
 class CommandRouter:
     """Maps Pachka slash-commands to Tracker data calls and produces Markdown replies.
 
-    Two-step dialog for subdomain/team commands:
-      1. Bot sends a numbered list of portfolios.
-      2. User replies with a number → bot fetches and renders the chosen report.
+    Two-step dialog for any command that must disambiguate between multiple portfolios:
+      1. Bot sends a numbered list.
+      2. User replies with a number → bot fetches and renders the chosen view.
+    If only one portfolio matches, the dialog is skipped.
 
     In-memory pending state; cleared on restart.
     """
 
-    def __init__(self, aggregator: StatusAggregator, domain_id: str) -> None:
+    def __init__(self, aggregator: StatusAggregator, domain_ids: list[str]) -> None:
         self._agg = aggregator
-        self._domain_id = domain_id
+        self._domain_ids = domain_ids
         self._pending: dict[int, _PendingSelection] = {}
 
     async def handle(self, chat_id: int, text: str) -> str:
         text = (text or "").strip()
 
-        # If there's a pending selection and the user replied with a number, resolve it.
         if chat_id in self._pending and text.lstrip("-").isdigit():
             return await self._resolve(chat_id, int(text))
 
         cmd = text.split()[0].lower() if text else ""
 
-        # A non-numeric message always cancels any pending state silently.
         if chat_id in self._pending:
             del self._pending[chat_id]
 
-        match cmd:
-            case "/help":
-                return render_help()
-            case "/show_domain_report":
-                return await self._domain_report()
-            case "/show_domain_risk":
-                return await self._domain_risk()
-            case "/show_domain_list":
-                return await self._domain_list()
-            case "/show_subdomain_report":
-                return await self._ask(chat_id, "subdomain", "report")
-            case "/show_subdomain_risk":
-                return await self._ask(chat_id, "subdomain", "risk")
-            case "/show_subdomain_list":
-                return await self._subdomain_list()
-            case "/show_team_report":
-                return await self._ask(chat_id, "team", "report")
-            case "/show_team_risk":
-                return await self._ask(chat_id, "team", "risk")
-            case "/show_team_list":
-                return await self._team_list()
-            case _:
-                return "Неизвестная команда. Введите /help для справки."
+        if cmd == "/help":
+            return render_help()
+        if cmd == "/show_domain_list":
+            return await self._domain_list()
+        if cmd == "/show_subdomain_list":
+            return await self._subdomain_list()
+        if cmd == "/show_team_list":
+            return await self._team_list()
 
-    # ── direct (no dialog) ──────────────────────────────────────────────────
+        for action in ("report", "risk", "blocked", "on_track"):
+            for level in ("domain", "subdomain", "team"):
+                if cmd == f"/show_{level}_{action}":
+                    return await self._ask(chat_id, level, action)  # type: ignore[arg-type]
 
-    async def _domain_report(self) -> str:
-        domain = await self._agg.get_portfolio(self._domain_id)
-        summaries = await self._agg.domain_report(self._domain_id)
-        return render_report(f"Отчёт по домену: {domain.summary}", summaries)
+        return "Неизвестная команда. Введите /help для справки."
 
-    async def _domain_risk(self) -> str:
-        domain = await self._agg.get_portfolio(self._domain_id)
-        summaries = await self._agg.domain_report(self._domain_id)
-        return render_risk(f"Риски домена: {domain.summary}", summaries)
+    # ── list commands ───────────────────────────────────────────────────────
 
     async def _domain_list(self) -> str:
-        subs = await self._agg.list_subdomains(self._domain_id)
-        return render_list("Поддомены", subs, web_base=self._agg.web_base)
+        domains = await self._load_domains()
+        return render_list("Домены", domains, web_base=self._agg.web_base)
 
     async def _subdomain_list(self) -> str:
-        subs = await self._agg.list_subdomains(self._domain_id)
+        subs = await self._all_subdomains()
         return render_list("Поддомены", subs, web_base=self._agg.web_base)
 
     async def _team_list(self) -> str:
         teams = await self._all_teams()
         return render_list("Команды", teams, web_base=self._agg.web_base)
 
-    # ── two-step dialog ────────────────────────────────────────────────────
+    # ── dialog ──────────────────────────────────────────────────────────────
 
-    async def _ask(
-        self,
-        chat_id: int,
-        level: Literal["subdomain", "team"],
-        action: Literal["report", "risk"],
-    ) -> str:
-        choices = (
-            await self._agg.list_subdomains(self._domain_id)
-            if level == "subdomain"
-            else await self._all_teams()
-        )
+    async def _ask(self, chat_id: int, level: Level, action: Action) -> str:
+        choices = await self._list_for_level(level)
         if not choices:
             return f"Нет доступных {_LEVEL_NOUN[level]}."
+        if len(choices) == 1:
+            return await self._render_for(choices[0], level, action)
+
         self._pending[chat_id] = _PendingSelection(action=action, level=level, choices=choices)
         lines = [_SELECTION_HEADER[level], ""]
         lines.extend(f"{i + 1}. {p.summary}" for i, p in enumerate(choices))
@@ -130,21 +137,38 @@ class CommandRouter:
         idx = number - 1
         if not (0 <= idx < len(pending.choices)):
             return f"Неверный номер. Введите от 1 до {len(pending.choices)}."
-        portfolio = pending.choices[idx]
-        renderer = render_report if pending.action == "report" else render_risk
-        action_label = "Отчёт" if pending.action == "report" else "Риски"
-        if pending.level == "subdomain":
+        return await self._render_for(pending.choices[idx], pending.level, pending.action)
+
+    async def _render_for(self, portfolio: Portfolio, level: Level, action: Action) -> str:
+        if level == "domain":
+            summaries = await self._agg.domain_report(portfolio.id)
+        elif level == "subdomain":
             summaries = await self._agg.subdomain_report(portfolio.id)
-            title = f"{action_label} поддомена: {portfolio.summary}"
         else:
             summaries = await self._agg.team_report(portfolio.id)
-            title = f"{action_label} команды: {portfolio.summary}"
-        return renderer(title, summaries)
+        title = f"{_ACTION_LABEL[action]} {_LEVEL_GENITIVE[level]}: {portfolio.summary}"
+        return _RENDERERS[action](title, summaries)
 
     # ── helpers ────────────────────────────────────────────────────────────
 
+    async def _list_for_level(self, level: Level) -> list[Portfolio]:
+        if level == "domain":
+            return await self._load_domains()
+        if level == "subdomain":
+            return await self._all_subdomains()
+        return await self._all_teams()
+
+    async def _load_domains(self) -> list[Portfolio]:
+        return [await self._agg.get_portfolio(did) for did in self._domain_ids]
+
+    async def _all_subdomains(self) -> list[Portfolio]:
+        result: list[Portfolio] = []
+        for did in self._domain_ids:
+            result.extend(await self._agg.list_subdomains(did))
+        return result
+
     async def _all_teams(self) -> list[Portfolio]:
         teams: list[Portfolio] = []
-        for sub in await self._agg.list_subdomains(self._domain_id):
+        for sub in await self._all_subdomains():
             teams.extend(await self._agg.list_teams(sub.id))
         return teams

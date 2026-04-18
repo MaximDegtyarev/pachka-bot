@@ -2,8 +2,10 @@ from datetime import UTC, datetime
 
 from app.report.builder import (
     ProjectSummary,
+    render_blocked,
     render_help,
     render_list,
+    render_on_track,
     render_report,
     render_risk,
 )
@@ -20,6 +22,7 @@ def _project(
     short_id: int = 7,
     summary: str = "Bot",
     lead_display: str | None = "Иван Иванов",
+    end: str | None = None,
 ) -> Project:
     lead = TrackerUser(id="u1", display=lead_display) if lead_display is not None else None
     return Project(
@@ -32,7 +35,7 @@ def _project(
         parent_portfolio_display="Команда А",
         lead=lead,
         start=None,
-        end=None,
+        end=end,
         updated_at=None,
         tags=(),
     )
@@ -55,7 +58,7 @@ def _summary(
     )
 
 
-def test_help_lists_all_ten_commands():
+def test_help_lists_all_commands():
     text = render_help()
     for cmd in (
         "/show_domain_report",
@@ -67,6 +70,12 @@ def test_help_lists_all_ten_commands():
         "/show_domain_risk",
         "/show_subdomain_risk",
         "/show_team_risk",
+        "/show_domain_blocked",
+        "/show_subdomain_blocked",
+        "/show_team_blocked",
+        "/show_domain_on_track",
+        "/show_subdomain_on_track",
+        "/show_team_on_track",
         "/help",
     ):
         assert cmd in text
@@ -163,7 +172,7 @@ def test_render_report_preserves_multiline_comment_formatting():
     assert "  extra" in text
 
 
-def test_render_risk_excludes_on_track_and_unknown():
+def test_render_risk_only_at_risk():
     on_track = _summary(
         project=_project(pid="p1", summary="OnTrack"),
         business_status=BusinessStatus.ON_TRACK,
@@ -182,7 +191,7 @@ def test_render_risk_excludes_on_track_and_unknown():
     )
     text = render_risk("Риски", [on_track, at_risk, blocked, unknown])
     assert "AtRisk" in text
-    assert "Blocked" in text
+    assert "Blocked" not in text
     assert "OnTrack" not in text
     assert "Unknown" not in text
 
@@ -192,3 +201,61 @@ def test_render_risk_empty_when_no_risky_projects():
     unknown = _summary(business_status=BusinessStatus.UNKNOWN)
     text = render_risk("Риски", [on_track, unknown])
     assert "Проектов с рисками нет" in text
+
+
+def test_render_blocked_only_blocked():
+    at_risk = _summary(
+        project=_project(pid="p1", summary="AtRisk"),
+        business_status=BusinessStatus.AT_RISK,
+    )
+    blocked = _summary(
+        project=_project(pid="p2", summary="Blocked"),
+        business_status=BusinessStatus.BLOCKED,
+    )
+    text = render_blocked("Заблокированные", [at_risk, blocked])
+    assert "Blocked" in text
+    assert "AtRisk" not in text
+
+
+def test_render_blocked_empty():
+    on_track = _summary(business_status=BusinessStatus.ON_TRACK)
+    text = render_blocked("Заблокированные", [on_track])
+    assert "Заблокированных проектов нет" in text
+
+
+def test_render_on_track_only_on_track():
+    on_track = _summary(
+        project=_project(pid="p1", summary="Alpha"),
+        business_status=BusinessStatus.ON_TRACK,
+    )
+    at_risk = _summary(
+        project=_project(pid="p2", summary="Beta"),
+        business_status=BusinessStatus.AT_RISK,
+    )
+    text = render_on_track("По плану", [on_track, at_risk])
+    assert "Alpha" in text
+    assert "Beta" not in text
+
+
+def test_render_on_track_empty():
+    at_risk = _summary(business_status=BusinessStatus.AT_RISK)
+    text = render_on_track("По плану", [at_risk])
+    assert "Проектов по плану нет" in text
+
+
+def test_render_report_shows_project_deadline():
+    project = _project(end="2026-12-31")
+    s = _summary(project=project)
+    text = render_report("Отчёт", [s])
+    assert "Дедлайн: 2026-12-31" in text
+
+
+def test_render_report_missing_status_shows_not_filled_note():
+    s = _summary(
+        weekly_status=None,
+        business_status=BusinessStatus.UNKNOWN,
+        is_stale=True,
+    )
+    text = render_report("Отчёт", [s])
+    assert "Статус не заполнен" in text
+    assert "устарели" not in text

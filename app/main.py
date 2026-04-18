@@ -50,7 +50,7 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
         base_url=settings.pachca_api_base,
         access_token=settings.pachca_access_token,
     )
-    command_router = CommandRouter(aggregator, domain_id=settings.portfolio_domain_id)
+    command_router = CommandRouter(aggregator, domain_ids=settings.portfolio_domain_ids)
 
     application.state.tracker = tracker
     application.state.command_router = command_router

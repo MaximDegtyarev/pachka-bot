@@ -6,11 +6,8 @@ import pytest
 
 from app.commands.router import CommandRouter
 from app.report.aggregator import AggregatorConfig, StatusAggregator
-from app.report.builder import ProjectSummary
-from app.status.mapping import BusinessStatus
 from app.tracker.models import Comment, Portfolio, Project, TrackerUser
 
-DOMAIN_ID = "domain-1"
 NOW = datetime(2026, 4, 17, 12, 0, tzinfo=UTC)
 
 
@@ -40,31 +37,14 @@ def _project(pid: str, summary: str) -> Project:
     )
 
 
-def _summary(pid: str, summary: str) -> ProjectSummary:
-    sid = _SHORT_IDS.setdefault(pid, len(_SHORT_IDS) + 1)
-    return ProjectSummary(
-        project=_project(pid, summary),
-        weekly_status=None,
-        business_status=BusinessStatus.ON_TRACK,
-        is_stale=True,
-        project_url=f"https://tracker.yandex.ru/projects/{sid}",
-    )
-
-
 class FakeTracker:
-    def __init__(self, domain: Portfolio, children: dict, projects: dict) -> None:
-        self.domain = domain
+    def __init__(self, portfolios: dict, children: dict, projects: dict) -> None:
+        self.portfolios = portfolios
         self.children = children
         self.projects = projects
 
     async def get_portfolio(self, pid: str) -> Portfolio:
-        if pid == self.domain.id:
-            return self.domain
-        for portf_list in self.children.values():
-            for p in portf_list:
-                if p.id == pid:
-                    return p
-        raise KeyError(pid)
+        return self.portfolios[pid]
 
     async def list_child_portfolios(self, parent_id: str) -> list[Portfolio]:
         return self.children.get(parent_id, [])
@@ -76,7 +56,8 @@ class FakeTracker:
         return []
 
 
-DOMAIN = _portfolio("domain-1", "B2B PMO")
+DOMAIN_A = _portfolio("domain-1", "B2B PMO")
+DOMAIN_B = _portfolio("domain-2", "B2C PMO")
 SUBDOMAIN_A = _portfolio("sub-a", "SubA")
 SUBDOMAIN_B = _portfolio("sub-b", "SubB")
 TEAM_1 = _portfolio("team-1", "Team 1")
@@ -85,12 +66,19 @@ PROJ_1 = _project("proj-1", "Project Alpha")
 PROJ_2 = _project("proj-2", "Project Beta")
 
 
-@pytest.fixture
-def router() -> CommandRouter:
+def _make_router(domain_ids: list[str]) -> CommandRouter:
     tracker = FakeTracker(
-        domain=DOMAIN,
+        portfolios={
+            "domain-1": DOMAIN_A,
+            "domain-2": DOMAIN_B,
+            "sub-a": SUBDOMAIN_A,
+            "sub-b": SUBDOMAIN_B,
+            "team-1": TEAM_1,
+            "team-2": TEAM_2,
+        },
         children={
             "domain-1": [SUBDOMAIN_A, SUBDOMAIN_B],
+            "domain-2": [],
             "sub-a": [TEAM_1],
             "sub-b": [TEAM_2],
         },
@@ -101,54 +89,76 @@ def router() -> CommandRouter:
     )
     cfg = AggregatorConfig(web_base="https://tracker.yandex.ru", freshness_days=6)
     agg = StatusAggregator(tracker, cfg)
-    return CommandRouter(agg, DOMAIN_ID)
+    return CommandRouter(agg, domain_ids=domain_ids)
+
+
+@pytest.fixture
+def router() -> CommandRouter:
+    return _make_router(["domain-1"])
+
+
+@pytest.fixture
+def multi_domain_router() -> CommandRouter:
+    return _make_router(["domain-1", "domain-2"])
 
 
 async def test_help(router: CommandRouter):
     reply = await router.handle(1, "/help")
     assert "/show_domain_report" in reply
+    assert "/show_domain_blocked" in reply
+    assert "/show_domain_on_track" in reply
     assert "/help" in reply
 
 
 async def test_unknown_command(router: CommandRouter):
     reply = await router.handle(1, "/foo")
-    assert "/help" in reply.lower() or "неизвестная" in reply.lower()
+    assert "неизвестная" in reply.lower()
 
 
-async def test_domain_report_direct(router: CommandRouter):
+async def test_domain_report_single_domain_runs_directly(router: CommandRouter):
     reply = await router.handle(1, "/show_domain_report")
     assert "B2B PMO" in reply
+    assert "Отчёт" in reply
 
 
-async def test_domain_risk_direct(router: CommandRouter):
-    reply = await router.handle(1, "/show_domain_risk")
+async def test_domain_list_shows_configured_domains(router: CommandRouter):
+    reply = await router.handle(1, "/show_domain_list")
+    assert "B2B PMO" in reply
+    assert "SubA" not in reply
+
+
+async def test_multi_domain_list(multi_domain_router: CommandRouter):
+    reply = await multi_domain_router.handle(1, "/show_domain_list")
+    assert "B2B PMO" in reply
+    assert "B2C PMO" in reply
+
+
+async def test_multi_domain_report_asks_choice(multi_domain_router: CommandRouter):
+    reply = await multi_domain_router.handle(42, "/show_domain_report")
+    assert "1." in reply and "B2B PMO" in reply
+    assert "2." in reply and "B2C PMO" in reply
+
+    reply = await multi_domain_router.handle(42, "1")
     assert "B2B PMO" in reply
 
 
-async def test_domain_list_shows_subdomains(router: CommandRouter):
-    reply = await router.handle(1, "/show_domain_list")
+async def test_subdomain_list(router: CommandRouter):
+    reply = await router.handle(1, "/show_subdomain_list")
     assert "SubA" in reply
     assert "SubB" in reply
 
 
-async def test_subdomain_list_shows_subdomains(router: CommandRouter):
-    reply = await router.handle(1, "/show_subdomain_list")
-    assert "SubA" in reply
-
-
-async def test_team_list_shows_all_teams(router: CommandRouter):
+async def test_team_list(router: CommandRouter):
     reply = await router.handle(1, "/show_team_list")
     assert "Team 1" in reply
     assert "Team 2" in reply
 
 
 async def test_subdomain_report_two_step(router: CommandRouter):
-    # Step 1: command → numbered list
     reply = await router.handle(42, "/show_subdomain_report")
     assert "1." in reply and "SubA" in reply
     assert "2." in reply and "SubB" in reply
 
-    # Step 2: pick SubA → report
     reply = await router.handle(42, "1")
     assert "SubA" in reply
     assert "Отчёт" in reply
@@ -162,39 +172,39 @@ async def test_subdomain_risk_two_step(router: CommandRouter):
 
 
 async def test_team_report_two_step(router: CommandRouter):
-    reply = await router.handle(42, "/show_team_report")
-    assert "Team 1" in reply or "Team 2" in reply
-
+    await router.handle(42, "/show_team_report")
     reply = await router.handle(42, "1")
     assert "Team 1" in reply
     assert "Отчёт" in reply
 
 
-async def test_team_risk_two_step(router: CommandRouter):
-    await router.handle(42, "/show_team_risk")
-    reply = await router.handle(42, "2")
-    assert "Team 2" in reply
-    assert "Риски" in reply
+async def test_blocked_command(router: CommandRouter):
+    await router.handle(42, "/show_team_blocked")
+    reply = await router.handle(42, "1")
+    assert "Заблокированные" in reply
 
 
-async def test_out_of_range_number_returns_error(router: CommandRouter):
+async def test_on_track_command(router: CommandRouter):
+    await router.handle(42, "/show_team_on_track")
+    reply = await router.handle(42, "1")
+    assert "По плану" in reply
+
+
+async def test_out_of_range_number(router: CommandRouter):
     await router.handle(42, "/show_subdomain_report")
     reply = await router.handle(42, "99")
     assert "1 до 2" in reply
-    # Pending is cleared — a new command starts fresh
     assert 42 not in router._pending
 
 
-async def test_non_numeric_reply_cancels_pending(router: CommandRouter):
+async def test_non_numeric_cancels_pending(router: CommandRouter):
     await router.handle(42, "/show_subdomain_report")
-    # User sends something other than a number
     reply = await router.handle(42, "/help")
-    assert "/show_domain_report" in reply  # help text, not a list
+    assert "/show_domain_report" in reply
     assert 42 not in router._pending
 
 
-async def test_different_chats_have_independent_state(router: CommandRouter):
-    # Chat 10 picks subdomain A, chat 20 picks subdomain B
+async def test_independent_chat_state(router: CommandRouter):
     await router.handle(10, "/show_subdomain_report")
     await router.handle(20, "/show_subdomain_report")
 
