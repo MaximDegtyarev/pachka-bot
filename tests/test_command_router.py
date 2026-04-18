@@ -26,7 +26,7 @@ def _project(pid: str, summary: str) -> Project:
         short_id=sid,
         summary=summary,
         description=None,
-        entity_status="on_track",
+        entity_status="according_to_plan",
         parent_portfolio_id=None,
         parent_portfolio_display=None,
         lead=TrackerUser(id="u1", display="Лид"),

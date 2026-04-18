@@ -25,12 +25,12 @@ STATUS_LABEL_RU: dict[BusinessStatus, str] = {
 
 
 # Confirmed live against the Tracker /v2/entities/project API:
-# Tracker UI «По плану»      → "on_track"
+# Tracker UI «По плану»      → "according_to_plan"
 # Tracker UI «Есть риски»    → "at_risk"
 # Tracker UI «Заблокирован»  → "blocked"
 # Any other value (draft, in_progress, launched, paused, ...) falls back to UNKNOWN.
 TRACKER_STATUS_MAP: dict[str, BusinessStatus] = {
-    "on_track": BusinessStatus.ON_TRACK,
+    "according_to_plan": BusinessStatus.ON_TRACK,
     "at_risk": BusinessStatus.AT_RISK,
     "blocked": BusinessStatus.BLOCKED,
 }

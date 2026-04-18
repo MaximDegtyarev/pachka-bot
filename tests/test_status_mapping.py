@@ -7,13 +7,13 @@ from app.status.mapping import (
 
 
 def test_known_codes_map_to_business_statuses():
-    assert map_tracker_status("on_track") == BusinessStatus.ON_TRACK
+    assert map_tracker_status("according_to_plan") == BusinessStatus.ON_TRACK
     assert map_tracker_status("at_risk") == BusinessStatus.AT_RISK
     assert map_tracker_status("blocked") == BusinessStatus.BLOCKED
 
 
 def test_case_and_whitespace_insensitive():
-    assert map_tracker_status("  On_Track  ") == BusinessStatus.ON_TRACK
+    assert map_tracker_status("  According_To_Plan  ") == BusinessStatus.ON_TRACK
     assert map_tracker_status("AT_RISK") == BusinessStatus.AT_RISK
 
 

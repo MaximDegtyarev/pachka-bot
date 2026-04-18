@@ -30,7 +30,7 @@ def _project(
         short_id=short_id,
         summary=summary,
         description=None,
-        entity_status="on_track",
+        entity_status="according_to_plan",
         parent_portfolio_id="pf1",
         parent_portfolio_display="Команда А",
         lead=lead,
