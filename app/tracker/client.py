@@ -13,6 +13,7 @@ PROJECT_FIELDS = "summary,description,entityStatus,parentEntity,lead,start,end,t
 
 class TrackerClient(Protocol):
     async def get_portfolio(self, portfolio_id: str) -> Portfolio: ...
+    async def list_child_portfolios(self, parent_id: str) -> list[Portfolio]: ...
     async def list_projects_in_portfolio(self, portfolio_id: str) -> list[Project]: ...
     async def get_project(self, project_id: str) -> Project: ...
     async def list_project_comments(self, project_id: str) -> list[Comment]: ...
@@ -126,6 +127,19 @@ class YandexTrackerClient:
         )
         r.raise_for_status()
         return _parse_portfolio(r.json())
+
+    async def list_child_portfolios(
+        self, parent_id: str, *, per_page: int = 50
+    ) -> list[Portfolio]:
+        return [
+            _parse_portfolio(raw)
+            for raw in await self._search_all(
+                "/v2/entities/portfolio/_search",
+                body={"filter": {"parentEntity": parent_id}},
+                fields=PORTFOLIO_FIELDS,
+                per_page=per_page,
+            )
+        ]
 
     async def list_projects_in_portfolio(
         self, portfolio_id: str, *, per_page: int = 50
