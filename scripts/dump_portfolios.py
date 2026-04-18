@@ -17,6 +17,33 @@ import sys
 import httpx
 
 
+async def _try(client: httpx.AsyncClient, method: str, url: str, **kw) -> dict | None:
+    r = await client.request(method, url, **kw)
+    print(f"{method} {url} -> {r.status_code}")
+    try:
+        data = r.json()
+        print(json.dumps(data, ensure_ascii=False, indent=2))
+        return data
+    except Exception:
+        print(r.text)
+        return None
+
+
+PROJECT_FIELDS = ",".join(
+    [
+        "summary",
+        "description",
+        "lead",
+        "teamUsers",
+        "parentEntity",
+        "start",
+        "end",
+        "tags",
+        "entityStatus",
+    ]
+)
+
+
 async def main(portfolio_id: str) -> None:
     token = os.environ["TRACKER_OAUTH_TOKEN"]
     org_id = os.environ["TRACKER_ORG_ID"]
@@ -24,24 +51,57 @@ async def main(portfolio_id: str) -> None:
 
     headers = {
         "Authorization": f"OAuth {token}",
-        "X-Cloud-Org-ID": org_id,
+        "X-Org-ID": org_id,
         "Content-Type": "application/json",
     }
 
     async with httpx.AsyncClient(base_url=base, headers=headers, timeout=30.0) as client:
-        print(f"== GET /v2/entities/portfolio/{portfolio_id}")
-        r = await client.get(f"/v2/entities/portfolio/{portfolio_id}")
-        print(r.status_code)
-        print(json.dumps(r.json(), ensure_ascii=False, indent=2))
-
-        print("\n== POST /v2/entities/project/_search  (filter: parent=portfolio)")
-        r = await client.post(
-            "/v2/entities/project/_search",
-            json={"filter": {"parentEntity": portfolio_id}},
-            params={"perPage": 50},
+        print("=== 1. ALL portfolios (tree) ===")
+        data = await _try(
+            client,
+            "POST",
+            "/v2/entities/portfolio/_search",
+            json={},
+            params={"perPage": 100, "fields": "summary,lead,parentEntity"},
         )
-        print(r.status_code)
-        print(json.dumps(r.json(), ensure_ascii=False, indent=2)[:4000])
+        portfolios: list[dict] = (data or {}).get("values", [])
+        print("\n--- Tree summary ---")
+        for p in portfolios:
+            pid = p.get("id")
+            f = p.get("fields", {})
+            parent = (f.get("parentEntity") or {}).get("id") or "ROOT"
+            print(f"  {pid}  parent={parent}  summary={f.get('summary')!r}")
+
+        print("\n=== 2. ALL projects in tracker (no filter, minimal fields) ===")
+        await _try(
+            client,
+            "POST",
+            "/v2/entities/project/_search",
+            json={},
+            params={"perPage": 50, "fields": "summary"},
+        )
+
+        print("\n=== 3. ALL projects with rich fields ===")
+        await _try(
+            client,
+            "POST",
+            "/v2/entities/project/_search",
+            json={},
+            params={"perPage": 50, "fields": PROJECT_FIELDS},
+        )
+
+        print("\n=== 4. Projects in each portfolio ===")
+        for p in portfolios:
+            pid = p["id"]
+            summary = p.get("fields", {}).get("summary")
+            print(f"\n--- portfolio {pid} ({summary!r}) ---")
+            await _try(
+                client,
+                "POST",
+                "/v2/entities/project/_search",
+                json={"filter": {"parentEntity": pid}},
+                params={"perPage": 50, "fields": PROJECT_FIELDS},
+            )
 
 
 if __name__ == "__main__":

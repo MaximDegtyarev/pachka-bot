@@ -16,19 +16,27 @@ STATUS_EMOJI: dict[BusinessStatus, str] = {
 }
 
 
-# Mapping from Yandex Tracker status key/name to business status.
-# TODO: fill with the actual status keys from the target Tracker org.
-TRACKER_STATUS_MAP: dict[str, BusinessStatus] = {
-    "on_track": BusinessStatus.ON_TRACK,
-    "по плану": BusinessStatus.ON_TRACK,
-    "at_risk": BusinessStatus.AT_RISK,
-    "есть риски": BusinessStatus.AT_RISK,
-    "blocked": BusinessStatus.BLOCKED,
-    "заблокирован": BusinessStatus.BLOCKED,
+STATUS_LABEL_RU: dict[BusinessStatus, str] = {
+    BusinessStatus.ON_TRACK: "По плану",
+    BusinessStatus.AT_RISK: "Есть риски",
+    BusinessStatus.BLOCKED: "Заблокирован",
+    BusinessStatus.UNKNOWN: "Статус неизвестен или отсутствует",
 }
 
 
-def map_tracker_status(value: str | None) -> BusinessStatus:
-    if not value:
+# Confirmed live against the Tracker /v2/entities/project API:
+# Tracker UI «По плану»      → "according_to_plan"
+# Tracker UI «Есть риски»    → "at_risk"
+# Tracker UI «Заблокирован»  → "blocked"
+# Any other value (draft, in_progress, launched, paused, ...) falls back to UNKNOWN.
+TRACKER_STATUS_MAP: dict[str, BusinessStatus] = {
+    "according_to_plan": BusinessStatus.ON_TRACK,
+    "at_risk": BusinessStatus.AT_RISK,
+    "blocked": BusinessStatus.BLOCKED,
+}
+
+
+def map_tracker_status(entity_status: str | None) -> BusinessStatus:
+    if not entity_status:
         return BusinessStatus.UNKNOWN
-    return TRACKER_STATUS_MAP.get(value.strip().lower(), BusinessStatus.UNKNOWN)
+    return TRACKER_STATUS_MAP.get(entity_status.strip().lower(), BusinessStatus.UNKNOWN)

@@ -7,10 +7,12 @@ class Settings(BaseSettings):
     tracker_oauth_token: str
     tracker_org_id: str
     tracker_api_base: str = "https://api.tracker.yandex.net"
+    tracker_web_base: str = "https://tracker.yandex.ru"
+    # "360" for Yandex 360 orgs (X-Org-ID header) or "cloud" for Yandex Cloud orgs (X-Cloud-Org-ID).
+    tracker_org_type: str = "360"
 
-    portfolio_domain_id: str
-    portfolio_subdomain_id: str
-    portfolio_team_id: str
+    # Comma-separated list of top-level portfolio IDs.
+    portfolio_domain_ids: str
 
     pachca_access_token: str
     pachca_api_base: str = "https://api.pachca.com/api/shared/v1"
@@ -24,6 +26,10 @@ class Settings(BaseSettings):
 
     status_freshness_days: int = 6
     weekly_status_tag: str = "#WeeklyStatus"
+
+    @property
+    def domain_id_list(self) -> list[str]:
+        return [x.strip() for x in self.portfolio_domain_ids.split(",") if x.strip()]
 
 
 def get_settings() -> Settings:
