@@ -1,6 +1,7 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+import structlog
 from fastapi import FastAPI
 
 from app.api.health import router as health_router
@@ -12,9 +13,24 @@ from app.report.aggregator import AggregatorConfig, StatusAggregator
 from app.tracker.client import YandexTrackerClient
 
 
+def _configure_logging(level: str) -> None:
+    structlog.configure(
+        processors=[
+            structlog.contextvars.merge_contextvars,
+            structlog.processors.add_log_level,
+            structlog.processors.TimeStamper(fmt="iso"),
+            structlog.dev.ConsoleRenderer() if level == "DEBUG" else structlog.processors.JSONRenderer(),
+        ],
+        wrapper_class=structlog.make_filtering_bound_logger(
+            getattr(__import__("logging"), level, 20)
+        ),
+    )
+
+
 @asynccontextmanager
 async def lifespan(application: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
+    _configure_logging(settings.log_level.upper())
 
     tracker = YandexTrackerClient(
         base_url=settings.tracker_api_base,
@@ -35,6 +51,7 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
     )
     command_router = CommandRouter(aggregator, domain_id=settings.portfolio_domain_id)
 
+    application.state.tracker = tracker
     application.state.command_router = command_router
     application.state.pachca = pachca
 

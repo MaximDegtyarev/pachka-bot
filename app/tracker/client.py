@@ -120,6 +120,14 @@ class YandexTrackerClient:
     async def aclose(self) -> None:
         await self._http.aclose()
 
+    async def ping(self) -> bool:
+        """Return True if Tracker API is reachable and token is valid."""
+        try:
+            r = await self._http.get("/v2/myself")
+            return r.status_code < 500
+        except Exception:
+            return False
+
     async def get_portfolio(self, portfolio_id: str) -> Portfolio:
         r = await self._http.get(
             f"/v2/entities/portfolio/{portfolio_id}",
