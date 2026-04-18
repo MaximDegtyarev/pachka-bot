@@ -94,15 +94,15 @@ class CommandRouter:
 
     async def _domain_list(self) -> str:
         subs = await self._agg.list_subdomains(self._domain_id)
-        return render_list("Поддомены", subs)
+        return render_list("Поддомены", subs, web_base=self._agg.web_base)
 
     async def _subdomain_list(self) -> str:
         subs = await self._agg.list_subdomains(self._domain_id)
-        return render_list("Поддомены", subs)
+        return render_list("Поддомены", subs, web_base=self._agg.web_base)
 
     async def _team_list(self) -> str:
         teams = await self._all_teams()
-        return render_list("Команды", teams)
+        return render_list("Команды", teams, web_base=self._agg.web_base)
 
     # ── two-step dialog ────────────────────────────────────────────────────
 

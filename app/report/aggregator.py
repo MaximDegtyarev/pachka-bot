@@ -41,6 +41,10 @@ class StatusAggregator:
         self._client = client
         self._config = config
 
+    @property
+    def web_base(self) -> str:
+        return self._config.web_base
+
     async def get_portfolio(self, portfolio_id: str) -> Portfolio:
         return await self._client.get_portfolio(portfolio_id)
 

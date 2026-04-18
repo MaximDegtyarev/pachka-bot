@@ -88,6 +88,14 @@ def test_render_list_with_items():
     assert "- B2C" in text
 
 
+def test_render_list_with_hyperlinks():
+    portfolios = [
+        Portfolio(id="abc123", short_id=1, summary="B2B PMO", parent_id=None, lead=None),
+    ]
+    text = render_list("Поддомены", portfolios, web_base="https://tracker.yandex.ru")
+    assert "[B2B PMO](https://tracker.yandex.ru/pages/portfolios/abc123/projects)" in text
+
+
 def test_render_report_empty():
     text = render_report("Отчёт: Команда А", [])
     assert "Нет проектов" in text

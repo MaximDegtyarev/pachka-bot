@@ -42,11 +42,16 @@ def render_help() -> str:
     return HELP_TEXT
 
 
-def render_list(title: str, portfolios: list[Portfolio]) -> str:
+def render_list(title: str, portfolios: list[Portfolio], *, web_base: str | None = None) -> str:
     if not portfolios:
         return f"**{title}**\n\n_Нет портфелей._"
     lines = [f"**{title}**", ""]
-    lines.extend(f"- {p.summary}" for p in portfolios)
+    for p in portfolios:
+        if web_base:
+            url = f"{web_base.rstrip('/')}/pages/portfolios/{p.id}/projects"
+            lines.append(f"- [{p.summary}]({url})")
+        else:
+            lines.append(f"- {p.summary}")
     return "\n".join(lines)
 
 
