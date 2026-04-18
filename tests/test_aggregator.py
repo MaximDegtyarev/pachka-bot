@@ -15,7 +15,7 @@ def _portfolio(pid: str, summary: str, parent: str | None = None) -> Portfolio:
     return Portfolio(id=pid, short_id=int(pid[-1]), summary=summary, parent_id=parent, lead=None)
 
 
-def _project(pid: str, short_id: int, summary: str, entity_status: str = "in_progress") -> Project:
+def _project(pid: str, short_id: int, summary: str, entity_status: str = "on_track") -> Project:
     return Project(
         id=pid,
         short_id=short_id,
@@ -90,7 +90,7 @@ async def test_team_report_summaries_use_entity_status_when_fresh(cfg: Aggregato
 
 
 async def test_team_report_marks_unknown_when_no_comment(cfg: AggregatorConfig):
-    p = _project("p1", 10, "Bot", entity_status="in_progress")
+    p = _project("p1", 10, "Bot", entity_status="on_track")
     fake = FakeTracker(projects={"team-1": [p]}, comments={"p1": []})
     agg = StatusAggregator(fake, cfg)
     (s,) = await agg.team_report("team-1", now=NOW)
@@ -100,7 +100,7 @@ async def test_team_report_marks_unknown_when_no_comment(cfg: AggregatorConfig):
 
 
 async def test_team_report_marks_unknown_when_comment_stale(cfg: AggregatorConfig):
-    p = _project("p1", 10, "Bot", entity_status="in_progress")
+    p = _project("p1", 10, "Bot", entity_status="on_track")
     fake = FakeTracker(
         projects={"team-1": [p]},
         comments={"p1": [_comment("#WeeklyStatus\nComments: старо", age_days=10)]},
