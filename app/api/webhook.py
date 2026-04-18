@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Header, HTTPException, status
+from fastapi import APIRouter, Header, HTTPException, Request, status
 from pydantic import BaseModel
 
 from app.config import get_settings
@@ -8,18 +8,18 @@ router = APIRouter()
 
 class PachcaWebhookPayload(BaseModel):
     message: str
-    chat_id: int | str
-    user_id: int | str
-    message_id: int | str | None = None
+    chat_id: int
+    user_id: int | None = None
+    message_id: int | None = None
 
 
 class WebhookResponse(BaseModel):
-    response: str
-    status: str = "success"
+    status: str = "ok"
 
 
 @router.post("/webhook/pachca", response_model=WebhookResponse)
 async def pachca_webhook(
+    request: Request,
     payload: PachcaWebhookPayload,
     x_api_key: str | None = Header(default=None, alias="X-API-Key"),
 ) -> WebhookResponse:
@@ -27,5 +27,10 @@ async def pachca_webhook(
     if x_api_key != settings.webhook_api_key:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid api key")
 
-    # TODO: route command to app.commands.router
-    return WebhookResponse(response=f"received: {payload.message}")
+    command_router = request.app.state.command_router
+    pachca = request.app.state.pachca
+
+    reply = await command_router.handle(payload.chat_id, payload.message)
+    await pachca.send_message(payload.chat_id, reply)
+
+    return WebhookResponse()

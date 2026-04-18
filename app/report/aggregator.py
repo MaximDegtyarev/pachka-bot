@@ -41,6 +41,9 @@ class StatusAggregator:
         self._client = client
         self._config = config
 
+    async def get_portfolio(self, portfolio_id: str) -> Portfolio:
+        return await self._client.get_portfolio(portfolio_id)
+
     async def list_subdomains(self, domain_id: str) -> list[Portfolio]:
         return await self._client.list_child_portfolios(domain_id)
 
