@@ -102,4 +102,4 @@ class StatusAggregator:
         return result
 
     def _project_url(self, project: Project) -> str:
-        return f"{self._config.web_base.rstrip('/')}/projects/{project.short_id}"
+        return f"{self._config.web_base.rstrip('/')}/pages/projects/{project.short_id}"

@@ -86,7 +86,7 @@ async def test_team_report_summaries_use_entity_status_when_fresh(cfg: Aggregato
     assert s.business_status == BusinessStatus.AT_RISK
     assert s.is_stale is False
     assert s.weekly_status is not None and "риск" in s.weekly_status.comments
-    assert s.project_url == "https://tracker.yandex.ru/projects/10"
+    assert s.project_url == "https://tracker.yandex.ru/pages/projects/10"
 
 
 async def test_team_report_marks_unknown_when_no_comment(cfg: AggregatorConfig):
@@ -206,4 +206,4 @@ async def test_project_url_strips_trailing_slash_in_web_base():
         AggregatorConfig(web_base="https://tracker.yandex.ru/", freshness_days=6),
     )
     (s,) = await agg.team_report("t", now=NOW)
-    assert s.project_url == "https://tracker.yandex.ru/projects/42"
+    assert s.project_url == "https://tracker.yandex.ru/pages/projects/42"
