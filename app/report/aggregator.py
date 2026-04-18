@@ -4,10 +4,14 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
+import structlog
+
 from app.report.builder import ProjectSummary
 from app.status.mapping import BusinessStatus, map_tracker_status
 from app.status.parser import pick_latest_weekly_status, utcnow
 from app.tracker.models import Comment, Portfolio, Project
+
+log = structlog.get_logger()
 
 
 class TrackerClient(Protocol):
@@ -91,8 +95,15 @@ class StatusAggregator:
             comments = await self._client.list_project_comments(p.id)
             ws = pick_latest_weekly_status([(c.body, c.created_at) for c in comments])
             is_stale = ws is None or not ws.is_fresh(now, self._config.freshness_days)
-            business_status = (
-                BusinessStatus.UNKNOWN if is_stale else map_tracker_status(p.entity_status)
+            mapped = map_tracker_status(p.entity_status)
+            business_status = BusinessStatus.UNKNOWN if is_stale else mapped
+            log.info(
+                "project.status",
+                project_id=p.id,
+                summary=p.summary,
+                entity_status=p.entity_status,
+                mapped=mapped.value,
+                is_stale=is_stale,
             )
             result.append(
                 ProjectSummary(
