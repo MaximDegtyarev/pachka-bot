@@ -122,7 +122,21 @@ DL по решению: <дедлайн в любом формате>
 
 Комментарии проекта запрашиваются один раз на уникальный ID, чтобы не бить Tracker API лишними вызовами.
 
-### 2.6. Фильтры отчётов
+### 2.6. Поля проекта в отчёте
+
+Запрос полей: `PROJECT_FIELDS = "summary,description,entityStatus,parentEntity,lead,start,end,tags"` (`app/tracker/client.py`).
+
+| Поле в отчёте | Tracker API path | Модель | Примечание |
+|---|---|---|---|
+| Название проекта | `fields.summary` | `Project.summary` | Используется как текст гиперссылки. |
+| Ответственный | `fields.lead.display` | `Project.lead.display` | Если `null` или `lead` не назначен → показывается `—`. |
+| Статус (эмодзи) | `fields.entityStatus` | `Project.entity_status` | Маппинг см. §2.3; итоговый статус — только при свежем `#WeeklyStatus`. |
+| Дедлайн | `fields.end` | `Project.end` | Строка `YYYY-MM-DD` как возвращает Tracker; не отображается если `null`. |
+| Комментарий/DL | комментарии проекта | `Comment.body` → `WeeklyStatus` | Парсится из `#WeeklyStatus`-комментариев, §2.2. |
+
+URL проекта строится из `short_id` (числовой идентификатор) по шаблону `{TRACKER_WEB_BASE}/pages/projects/{short_id}`, аналогично для портфелей — `{TRACKER_WEB_BASE}/pages/portfolios/{id}/projects`.
+
+### 2.7. Фильтры отчётов
 
 `render_report` показывает все проекты. Фильтрация — в `builder.py`:
 
