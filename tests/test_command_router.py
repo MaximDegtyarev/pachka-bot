@@ -213,3 +213,39 @@ async def test_independent_chat_state(router: CommandRouter):
 
     assert "SubA" in reply_10
     assert "SubB" in reply_20
+
+
+async def test_multi_domain_team_report_drills_down(multi_domain_router: CommandRouter):
+    reply = await multi_domain_router.handle(42, "/show_team_report")
+    assert "Выберите домен" in reply
+    assert "B2B PMO" in reply and "B2C PMO" in reply
+
+    reply = await multi_domain_router.handle(42, "1")
+    assert "Выберите команду" in reply
+    assert "Team 1" in reply and "Team 2" in reply
+
+    reply = await multi_domain_router.handle(42, "1")
+    assert "Team 1" in reply
+    assert "Отчёт" in reply
+    assert 42 not in multi_domain_router._pending
+
+
+async def test_multi_domain_subdomain_report_drills_down(multi_domain_router: CommandRouter):
+    reply = await multi_domain_router.handle(42, "/show_subdomain_report")
+    assert "Выберите домен" in reply
+
+    reply = await multi_domain_router.handle(42, "1")
+    assert "Выберите поддомен" in reply
+    assert "SubA" in reply and "SubB" in reply
+
+    reply = await multi_domain_router.handle(42, "2")
+    assert "SubB" in reply
+    assert "Отчёт" in reply
+
+
+async def test_multi_domain_team_report_skips_domain_with_no_teams(multi_domain_router: CommandRouter):
+    # domain-2 has no subdomains/teams in the fixture.
+    await multi_domain_router.handle(42, "/show_team_report")
+    reply = await multi_domain_router.handle(42, "2")
+    assert "нет команд" in reply.lower()
+    assert 42 not in multi_domain_router._pending

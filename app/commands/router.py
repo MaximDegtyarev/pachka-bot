@@ -20,10 +20,17 @@ Level = Literal["domain", "subdomain", "team"]
 
 @dataclass
 class _PendingSelection:
-    """State stored per chat while waiting for the user to pick a number."""
+    """State stored per chat while waiting for the user to pick a number.
+
+    `current_level` = what's being picked right now.
+    `final_level`   = what we ultimately want to render.
+    When `current_level == final_level`, the next numeric input produces the report.
+    Otherwise, the pick narrows the scope (e.g. domain → team).
+    """
 
     action: Action
-    level: Level
+    current_level: Level
+    final_level: Level
     choices: list[Portfolio]
 
 
@@ -63,12 +70,15 @@ _RENDERERS = {
 class CommandRouter:
     """Maps Pachka slash-commands to Tracker data calls and produces Markdown replies.
 
-    Two-step dialog for any command that must disambiguate between multiple portfolios:
-      1. Bot sends a numbered list.
-      2. User replies with a number → bot fetches and renders the chosen view.
-    If only one portfolio matches, the dialog is skipped.
+    Dialog flow:
+      - `/show_domain_*`       → pick domain (skipped if one domain is configured).
+      - `/show_subdomain_*`    → pick domain → pick subdomain (domain step skipped
+                                  if only one domain is configured).
+      - `/show_team_*`         → pick domain → pick team (team list is flattened
+                                  across all subdomains of the chosen domain).
 
-    In-memory pending state; cleared on restart.
+    Any single-choice step is auto-skipped. In-memory pending state; cleared on
+    restart.
     """
 
     def __init__(self, aggregator: StatusAggregator, domain_ids: list[str]) -> None:
@@ -120,24 +130,59 @@ class CommandRouter:
     # ── dialog ──────────────────────────────────────────────────────────────
 
     async def _ask(self, chat_id: int, level: Level, action: Action) -> str:
-        choices = await self._list_for_level(level)
-        if not choices:
-            return f"Нет доступных {_LEVEL_NOUN[level]}."
-        if len(choices) == 1:
-            return await self._render_for(choices[0], level, action)
+        # For subdomain/team reports, start from domain selection so the final
+        # list stays scoped to one domain.
+        if level in ("subdomain", "team"):
+            domains = await self._load_domains()
+            if not domains:
+                return "Нет доступных доменов."
+            if len(domains) == 1:
+                return await self._ask_within_domain(chat_id, domains[0], level, action)
+            return self._pend(chat_id, _PendingSelection(
+                action=action, current_level="domain", final_level=level, choices=domains,
+            ))
 
-        self._pending[chat_id] = _PendingSelection(action=action, level=level, choices=choices)
-        lines = [_SELECTION_HEADER[level], ""]
-        lines.extend(f"{i + 1}. {p.summary}" for i, p in enumerate(choices))
-        lines.append("\nВведите номер:")
-        return "\n".join(lines)
+        # Domain-level commands: pick a domain (or skip if single).
+        domains = await self._load_domains()
+        if not domains:
+            return "Нет доступных доменов."
+        if len(domains) == 1:
+            return await self._render_for(domains[0], "domain", action)
+        return self._pend(chat_id, _PendingSelection(
+            action=action, current_level="domain", final_level="domain", choices=domains,
+        ))
+
+    async def _ask_within_domain(
+        self, chat_id: int, domain: Portfolio, final_level: Level, action: Action
+    ) -> str:
+        choices = await self._children_for(domain, final_level)
+        if not choices:
+            return f"В домене «{domain.summary}» нет {_LEVEL_NOUN[final_level]}."
+        if len(choices) == 1:
+            return await self._render_for(choices[0], final_level, action)
+        return self._pend(chat_id, _PendingSelection(
+            action=action, current_level=final_level, final_level=final_level, choices=choices,
+        ))
 
     async def _resolve(self, chat_id: int, number: int) -> str:
         pending = self._pending.pop(chat_id)
         idx = number - 1
         if not (0 <= idx < len(pending.choices)):
             return f"Неверный номер. Введите от 1 до {len(pending.choices)}."
-        return await self._render_for(pending.choices[idx], pending.level, pending.action)
+        selected = pending.choices[idx]
+
+        if pending.current_level == pending.final_level:
+            return await self._render_for(selected, pending.final_level, pending.action)
+
+        # We just picked a domain; drill down to the final level inside it.
+        return await self._ask_within_domain(chat_id, selected, pending.final_level, pending.action)
+
+    def _pend(self, chat_id: int, selection: _PendingSelection) -> str:
+        self._pending[chat_id] = selection
+        lines = [_SELECTION_HEADER[selection.current_level], ""]
+        lines.extend(f"{i + 1}. {p.summary}" for i, p in enumerate(selection.choices))
+        lines.append("\nВведите номер:")
+        return "\n".join(lines)
 
     async def _render_for(self, portfolio: Portfolio, level: Level, action: Action) -> str:
         if level == "domain":
@@ -151,12 +196,14 @@ class CommandRouter:
 
     # ── helpers ────────────────────────────────────────────────────────────
 
-    async def _list_for_level(self, level: Level) -> list[Portfolio]:
-        if level == "domain":
-            return await self._load_domains()
-        if level == "subdomain":
-            return await self._all_subdomains()
-        return await self._all_teams()
+    async def _children_for(self, domain: Portfolio, final_level: Level) -> list[Portfolio]:
+        if final_level == "subdomain":
+            return await self._agg.list_subdomains(domain.id)
+        # team: flatten teams across all subdomains of the domain.
+        teams: list[Portfolio] = []
+        for sub in await self._agg.list_subdomains(domain.id):
+            teams.extend(await self._agg.list_teams(sub.id))
+        return teams
 
     async def _load_domains(self) -> list[Portfolio]:
         return [await self._agg.get_portfolio(did) for did in self._domain_ids]
