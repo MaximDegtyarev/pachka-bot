@@ -15,7 +15,7 @@ def _portfolio(pid: str, summary: str, parent: str | None = None) -> Portfolio:
     return Portfolio(id=pid, short_id=int(pid[-1]), summary=summary, parent_id=parent, lead=None)
 
 
-def _project(pid: str, short_id: int, summary: str, entity_status: str = "on_track") -> Project:
+def _project(pid: str, short_id: int, summary: str, entity_status: str = "according_to_plan") -> Project:
     return Project(
         id=pid,
         short_id=short_id,
@@ -194,6 +194,22 @@ async def test_list_subdomains_and_teams(cfg: AggregatorConfig):
     assert [p.summary for p in subs] == ["Sub 1"]
     teams = await agg.list_teams("s1")
     assert [p.summary for p in teams] == ["Team 1", "Team 2"]
+
+
+async def test_projects_with_unrecognized_status_are_excluded(cfg: AggregatorConfig):
+    recognized = _project("p1", 1, "OnTrack", entity_status="according_to_plan")
+    draft = _project("p2", 2, "Draft", entity_status="draft")
+    in_progress = _project("p3", 3, "InProgress", entity_status="in_progress")
+    launched = _project("p4", 4, "Launched", entity_status="launched")
+    fake = FakeTracker(
+        projects={"t": [recognized, draft, in_progress, launched]},
+        comments={"p1": []},
+    )
+    agg = StatusAggregator(fake, cfg)
+    summaries = await agg.team_report("t", now=NOW)
+    assert [s.project.id for s in summaries] == ["p1"]
+    # Comments should only be fetched for the recognized project
+    assert fake.comments_calls == ["p1"]
 
 
 async def test_project_url_strips_trailing_slash_in_web_base():

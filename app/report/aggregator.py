@@ -7,7 +7,7 @@ from typing import Protocol
 import structlog
 
 from app.report.builder import ProjectSummary
-from app.status.mapping import BusinessStatus, map_tracker_status
+from app.status.mapping import TRACKER_STATUS_MAP, BusinessStatus, map_tracker_status
 from app.status.parser import pick_latest_weekly_status, utcnow
 from app.tracker.models import Comment, Portfolio, Project
 
@@ -92,6 +92,10 @@ class StatusAggregator:
     ) -> list[ProjectSummary]:
         result: list[ProjectSummary] = []
         for p in projects:
+            raw_status = (p.entity_status or "").strip().lower()
+            if raw_status not in TRACKER_STATUS_MAP:
+                log.info("project.skipped", project_id=p.id, summary=p.summary, entity_status=p.entity_status)
+                continue
             comments = await self._client.list_project_comments(p.id)
             ws = pick_latest_weekly_status([(c.body, c.created_at) for c in comments])
             is_stale = ws is None or not ws.is_fresh(now, self._config.freshness_days)
