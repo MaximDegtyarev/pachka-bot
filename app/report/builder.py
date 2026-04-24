@@ -40,6 +40,9 @@ HELP_TEXT = (
     "- `/show_domain_on_track` — проекты по плану в домене\n"
     "- `/show_subdomain_on_track` — проекты по плану в поддомене\n"
     "- `/show_team_on_track` — проекты по плану в команде\n"
+    "- `/show_cross_domain` — кросс-командные проекты в домене\n"
+    "- `/show_cross_subdomain` — кросс-командные проекты в поддомене\n"
+    "- `/show_cross_team` — кросс-командные проекты в команде\n"
     "- `/help` — эта справка"
 )
 
@@ -80,6 +83,11 @@ def render_on_track(title: str, summaries: list[ProjectSummary]) -> str:
     return _render_blocks(title, filtered, empty_msg="Проектов по плану нет.")
 
 
+def render_cross(title: str, summaries: list[ProjectSummary]) -> str:
+    filtered = [s for s in summaries if any(t.lower() == "cross" for t in s.project.tags)]
+    return _render_blocks(title, filtered, empty_msg="Кросс-командных проектов нет.")
+
+
 def _render_blocks(title: str, summaries: list[ProjectSummary], *, empty_msg: str) -> str:
     if not summaries:
         return f"**{title}**\n\n_{empty_msg}_"
@@ -96,11 +104,15 @@ def _render_project_block(s: ProjectSummary) -> str:
     label = STATUS_LABEL_RU[s.business_status]
     lead = project.lead.display if project.lead and project.lead.display else "—"
 
+    client_names = ", ".join(c.display for c in project.clients if c.display)
+
     lines = [
         f"**[{project.summary}]({s.project_url})**",
         f"- Ответственный: {lead}",
-        f"- Статус: {emoji} {label}",
     ]
+    if client_names:
+        lines.append(f"- Заказчик: {client_names}")
+    lines.append(f"- Статус: {emoji} {label}")
 
     if project.end:
         lines.append(f"- Дедлайн: {project.end}")

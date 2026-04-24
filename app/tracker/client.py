@@ -8,7 +8,7 @@ import httpx
 from app.tracker.models import Comment, Portfolio, Project, TrackerUser
 
 PORTFOLIO_FIELDS = "summary,parentEntity,lead"
-PROJECT_FIELDS = "summary,description,entityStatus,parentEntity,lead,start,end,tags"
+PROJECT_FIELDS = "summary,description,entityStatus,parentEntity,lead,clients,start,end,tags"
 
 
 class TrackerClient(Protocol):
@@ -80,6 +80,7 @@ def _parse_project(data: dict[str, Any]) -> Project:
         end=f.get("end"),
         updated_at=_parse_dt(data.get("updatedAt")),
         tags=tuple(f.get("tags") or ()),
+        clients=tuple(filter(None, (_parse_user(u) for u in (f.get("clients") or [])))),
     )
 
 

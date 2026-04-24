@@ -118,7 +118,7 @@ async def test_get_project_parses_all_fields(
     httpx_mock.add_response(
         url=(
             f"{BASE_URL}/v2/entities/project/69e2138e71a22713b3e17e74"
-            "?fields=summary,description,entityStatus,parentEntity,lead,start,end,tags"
+            "?fields=summary,description,entityStatus,parentEntity,lead,clients,start,end,tags"
         ),
         json=PROJECT_JSON,
     )
@@ -145,7 +145,7 @@ async def test_list_projects_paginates_until_done(
         method="POST",
         url=(
             f"{BASE_URL}/v2/entities/project/_search"
-            "?perPage=50&page=1&fields=summary,description,entityStatus,parentEntity,lead,start,end,tags"
+            "?perPage=50&page=1&fields=summary,description,entityStatus,parentEntity,lead,clients,start,end,tags"
         ),
         json=page1,
     )
@@ -153,7 +153,7 @@ async def test_list_projects_paginates_until_done(
         method="POST",
         url=(
             f"{BASE_URL}/v2/entities/project/_search"
-            "?perPage=50&page=2&fields=summary,description,entityStatus,parentEntity,lead,start,end,tags"
+            "?perPage=50&page=2&fields=summary,description,entityStatus,parentEntity,lead,clients,start,end,tags"
         ),
         json=page2,
     )
@@ -214,7 +214,7 @@ async def test_list_projects_empty_portfolio(
         method="POST",
         url=(
             f"{BASE_URL}/v2/entities/project/_search"
-            "?perPage=50&page=1&fields=summary,description,entityStatus,parentEntity,lead,start,end,tags"
+            "?perPage=50&page=1&fields=summary,description,entityStatus,parentEntity,lead,clients,start,end,tags"
         ),
         json={"hits": 0, "pages": 0, "values": []},
     )
