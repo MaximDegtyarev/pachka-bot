@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from app.report.builder import (
     ProjectSummary,
     render_blocked,
+    render_cross,
     render_help,
     render_list,
     render_on_track,
@@ -23,8 +24,11 @@ def _project(
     summary: str = "Bot",
     lead_display: str | None = "Иван Иванов",
     end: str | None = None,
+    tags: tuple[str, ...] = (),
+    client_displays: list[str] | None = None,
 ) -> Project:
     lead = TrackerUser(id="u1", display=lead_display) if lead_display is not None else None
+    clients = tuple(TrackerUser(id=f"c{i}", display=d) for i, d in enumerate(client_displays or []))
     return Project(
         id=pid,
         short_id=short_id,
@@ -37,7 +41,8 @@ def _project(
         start=None,
         end=end,
         updated_at=None,
-        tags=(),
+        tags=tags,
+        clients=clients,
     )
 
 
@@ -76,6 +81,9 @@ def test_help_lists_all_commands():
         "/show_domain_on_track",
         "/show_subdomain_on_track",
         "/show_team_on_track",
+        "/show_cross_domain",
+        "/show_cross_subdomain",
+        "/show_cross_team",
         "/help",
     ):
         assert cmd in text
@@ -259,3 +267,41 @@ def test_render_report_missing_status_shows_not_filled_note():
     text = render_report("Отчёт", [s])
     assert "Статус не заполнен" in text
     assert "устарели" not in text
+
+
+def test_render_report_shows_client():
+    project = _project(client_displays=["Пётр Петров", "Анна Иванова"])
+    s = _summary(project=project)
+    text = render_report("Отчёт", [s])
+    assert "Заказчик: Пётр Петров, Анна Иванова" in text
+
+
+def test_render_report_no_client_line_when_empty():
+    project = _project(client_displays=[])
+    s = _summary(project=project)
+    text = render_report("Отчёт", [s])
+    assert "Заказчик" not in text
+
+
+def test_render_cross_only_cross_tagged():
+    cross = _summary(project=_project(pid="p1", summary="CrossProj", tags=("cross", "other")))
+    regular = _summary(project=_project(pid="p2", summary="RegularProj", tags=("other",)))
+    no_tags = _summary(project=_project(pid="p3", summary="NoTags"))
+    text = render_cross("Кросс", [cross, regular, no_tags])
+    assert "CrossProj" in text
+    assert "RegularProj" not in text
+    assert "NoTags" not in text
+
+
+def test_render_cross_tag_case_insensitive():
+    upper = _summary(project=_project(pid="p1", summary="Upper", tags=("Cross",)))
+    lower = _summary(project=_project(pid="p2", summary="Lower", tags=("cross",)))
+    text = render_cross("Кросс", [upper, lower])
+    assert "Upper" in text
+    assert "Lower" in text
+
+
+def test_render_cross_empty_when_no_cross_tag():
+    s = _summary(project=_project(tags=("regular",)))
+    text = render_cross("Кросс", [s])
+    assert "Кросс-командных проектов нет" in text

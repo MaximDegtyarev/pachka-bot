@@ -133,6 +133,7 @@ DL по решению: <дедлайн в любом формате>
 |---|---|---|---|
 | Название проекта | `fields.summary` | `Project.summary` | Используется как текст гиперссылки. |
 | Ответственный | `fields.lead.display` | `Project.lead.display` | Если `null` или `lead` не назначен → показывается `—`. |
+| Заказчик | `fields.clients[].display` | `Project.clients` | Массив пользователей; отображается через запятую. Строка скрыта, если список пуст. |
 | Статус (эмодзи) | `fields.entityStatus` | `Project.entity_status` | Маппинг см. §2.3; итоговый статус — только при свежем `#WeeklyStatus`. |
 | Дедлайн | `fields.end` | `Project.end` | Строка `YYYY-MM-DD` как возвращает Tracker; не отображается если `null`. |
 | Комментарий/DL | комментарии проекта | `Comment.body` → `WeeklyStatus` | Парсится из `#WeeklyStatus`-комментариев, §2.2. |
@@ -146,6 +147,7 @@ URL проекта строится из `short_id` (числовой идент
 - `render_risk` → только `AT_RISK` (заблокированные **не** включаются).
 - `render_blocked` → только `BLOCKED`.
 - `render_on_track` → только `ON_TRACK`.
+- `render_cross` → только проекты, у которых в `Project.tags` есть значение `"cross"` (регистронезависимо).
 
 Пустые результаты рендерятся отдельным сообщением (`Проектов с рисками нет.` и т.п.).
 
@@ -194,6 +196,7 @@ X-Pachca-Signature: sha256=<hex-hmac-sha256(body, WEBHOOK_API_KEY)>
 - `/help`
 - `/show_{domain,subdomain,team}_list`
 - `/show_{domain,subdomain,team}_{report,risk,blocked,on_track}`
+- `/show_cross_{domain,subdomain,team}`
 
 Неизвестная команда → `Неизвестная команда. Введите /help для справки.`
 
@@ -250,7 +253,7 @@ python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 cp .env.example .env           # заполнить секреты
 uvicorn app.main:app --reload
-pytest                          # 69 тестов, async
+pytest                          # 77 тестов, async
 ruff check .                    # линтер
 mypy app                        # типы
 ```

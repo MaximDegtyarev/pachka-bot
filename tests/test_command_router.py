@@ -249,3 +249,23 @@ async def test_multi_domain_team_report_skips_domain_with_no_teams(multi_domain_
     reply = await multi_domain_router.handle(42, "2")
     assert "нет команд" in reply.lower()
     assert 42 not in multi_domain_router._pending
+
+
+async def test_cross_team_command(router: CommandRouter):
+    reply = await router.handle(42, "/show_cross_team")
+    assert "Выберите команду" in reply
+
+    reply = await router.handle(42, "1")
+    assert "Кросс" in reply
+
+
+async def test_cross_domain_command_single_domain(router: CommandRouter):
+    reply = await router.handle(1, "/show_cross_domain")
+    assert "Кросс" in reply
+
+
+async def test_help_includes_cross_commands(router: CommandRouter):
+    reply = await router.handle(1, "/help")
+    assert "/show_cross_domain" in reply
+    assert "/show_cross_subdomain" in reply
+    assert "/show_cross_team" in reply

@@ -6,6 +6,7 @@ from typing import Literal
 from app.report.aggregator import StatusAggregator
 from app.report.builder import (
     render_blocked,
+    render_cross,
     render_help,
     render_list,
     render_on_track,
@@ -14,7 +15,7 @@ from app.report.builder import (
 )
 from app.tracker.models import Portfolio
 
-Action = Literal["report", "risk", "blocked", "on_track"]
+Action = Literal["report", "risk", "blocked", "on_track", "cross"]
 Level = Literal["domain", "subdomain", "team"]
 
 
@@ -57,6 +58,7 @@ _ACTION_LABEL: dict[Action, str] = {
     "risk": "Риски",
     "blocked": "Заблокированные",
     "on_track": "По плану",
+    "cross": "Кросс-командные проекты",
 }
 
 _RENDERERS = {
@@ -64,6 +66,7 @@ _RENDERERS = {
     "risk": render_risk,
     "blocked": render_blocked,
     "on_track": render_on_track,
+    "cross": render_cross,
 }
 
 
@@ -110,6 +113,10 @@ class CommandRouter:
             for level in ("domain", "subdomain", "team"):
                 if cmd == f"/show_{level}_{action}":
                     return await self._ask(chat_id, level, action)  # type: ignore[arg-type]
+
+        for level in ("domain", "subdomain", "team"):
+            if cmd == f"/show_cross_{level}":
+                return await self._ask(chat_id, level, "cross")  # type: ignore[arg-type]
 
         return "Неизвестная команда. Введите /help для справки."
 

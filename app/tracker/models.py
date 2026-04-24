@@ -41,6 +41,8 @@ class Project:
     end: str | None
     updated_at: datetime | None
     tags: tuple[str, ...] = field(default_factory=tuple)
+    # "clients" is the Tracker API field name for the Заказчик (customer) list on a project entity.
+    clients: tuple[TrackerUser, ...] = field(default_factory=tuple)
 
 
 @dataclass(frozen=True)
