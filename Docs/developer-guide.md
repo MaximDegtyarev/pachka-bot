@@ -162,9 +162,9 @@ URL проекта строится из `short_id` (числовой идент
 
 | Команда | Шаги диалога |
 |---|---|
-| `/show_domain_*` | домен |
-| `/show_subdomain_*` | домен → поддомен |
-| `/show_team_*` | домен → команда (все команды внутри выбранного домена, плоский список) |
+| `/show_domain_*`, `/show_cross_domain` | домен |
+| `/show_subdomain_*`, `/show_cross_subdomain` | домен → поддомен |
+| `/show_team_*`, `/show_cross_team` | домен → команда (все команды внутри выбранного домена, плоский список) |
 
 Любой шаг с единственным вариантом пропускается. Состояние хранится в `CommandRouter._pending: dict[chat_id, _PendingSelection]` и содержит `current_level` (что сейчас выбираем) и `final_level` (до чего нужно дойти). После выбора домена, если `current_level != final_level`, `_ask_within_domain` вычисляет дочерние портфели и продолжает диалог уже внутри домена.
 
@@ -191,7 +191,7 @@ X-Pachca-Signature: sha256=<hex-hmac-sha256(body, WEBHOOK_API_KEY)>
 
 ### 3.3. Slash-команды
 
-16 команд (см. подробно `Docs/user-guide.md`):
+19 команд (см. подробно `Docs/user-guide.md`):
 
 - `/help`
 - `/show_{domain,subdomain,team}_list`
